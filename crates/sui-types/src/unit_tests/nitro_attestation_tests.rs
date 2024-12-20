@@ -120,9 +120,7 @@ fn test_over_certificate_expiration() {
     );
     assert_eq!(
         res.unwrap_err(),
-        SuiError::AttestationFailedToVerify(
-            "InvalidCertificate: invalid peer certificate: Expired".to_string()
-        )
+        SuiError::AttestationFailedToVerify("InvalidCertificate: Certificate expired".to_string())
     );
 
     let now = 1731627987382 - 3 * 60 * 60 * 1000; // subtract 3 hours, cert is not valid yet
@@ -139,7 +137,22 @@ fn test_over_certificate_expiration() {
     assert_eq!(
         res.unwrap_err(),
         SuiError::AttestationFailedToVerify(
-            "InvalidCertificate: invalid peer certificate: NotValidYet".to_string()
+            "InvalidCertificate: Certificate not yet valid".to_string()
         )
     );
+}
+
+#[test]
+fn test_with_malformed_attestation() {
+    let res = attestation_verify_inner(
+        &Hex::decode("0000").unwrap(),
+        &Hex::decode("5a264748a62368075d34b9494634a3e096e0e48f6647f965b81d2a653de684f2").unwrap(),
+        &[&Hex::decode("000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000").unwrap()],
+        1731627987382,
+    );
+
+    assert!(matches!(
+        res.unwrap_err(),
+        SuiError::AttestationFailedToVerify(msg) if msg.starts_with("InvalidCoseSign1")
+    ));
 }

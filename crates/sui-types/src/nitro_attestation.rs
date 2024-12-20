@@ -4,26 +4,30 @@
 use serde::de::{MapAccess, Visitor};
 use serde::{ser::SerializeSeq, Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
-use std::time::Duration;
 use x509_parser::public_key::PublicKey;
 use x509_parser::x509::SubjectPublicKeyInfo;
 
 use crate::error::{SuiError, SuiResult};
 
 use ciborium::value::{Integer, Value};
+use once_cell::sync::Lazy;
 use p384::ecdsa::signature::Verifier;
 use p384::ecdsa::{Signature, VerifyingKey};
-use rustls::pki_types::CertificateDer;
-use rustls::pki_types::UnixTime;
-use rustls::server::WebPkiClientVerifier;
-use rustls::RootCertStore;
 use x509_parser::{certificate::X509Certificate, prelude::FromDer};
 
 #[cfg(test)]
 #[path = "unit_tests/nitro_attestation_tests.rs"]
 mod nitro_attestation_tests;
 
-const ROOT_CERTIFICATE_PEM: &[u8] = include_bytes!("./nitro_root_certificate.pem");
+static ROOT_CERTIFICATE: Lazy<Vec<u8>> = Lazy::new(|| {
+    let pem_bytes = include_bytes!("./nitro_root_certificate.pem");
+    let mut pem_cursor = std::io::Cursor::new(pem_bytes);
+    let cert = rustls_pemfile::certs(&mut pem_cursor)
+        .next()
+        .expect("should have root cert")
+        .expect("root cert should be valid");
+    cert.to_vec()
+});
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum NitroError {
@@ -31,6 +35,8 @@ pub enum NitroError {
     InvalidCoseSign1(String),
     /// Invalid signature.
     InvalidSignature,
+    /// Invalid public key.
+    InvalidPublicKey,
     /// Siganture failed to verify.
     SignatureFailedToVerify,
     /// Invalid attestation document
@@ -48,6 +54,7 @@ impl fmt::Display for NitroError {
         match self {
             NitroError::InvalidCoseSign1(msg) => write!(f, "InvalidCoseSign1: {}", msg),
             NitroError::InvalidSignature => write!(f, "InvalidSignature"),
+            NitroError::InvalidPublicKey => write!(f, "InvalidPublicKey"),
             NitroError::SignatureFailedToVerify => write!(f, "SignatureFailedToVerify"),
             NitroError::InvalidAttestationDoc(msg) => write!(f, "InvalidAttestationDoc: {}", msg),
             NitroError::InvalidCertificate(msg) => write!(f, "InvalidCertificate: {}", msg),
@@ -94,15 +101,13 @@ pub fn attestation_verify_inner(
     match pk_bytes {
         PublicKey::EC(ec) => {
             let verifying_key = VerifyingKey::from_sec1_bytes(ec.data())
-                .map_err(|err| NitroError::InvalidCertificate(err.to_string()))?;
+                .map_err(|_| NitroError::InvalidPublicKey)?;
             verifying_key
                 .verify(&cose_sign1.to_signed_message(), &signature)
                 .map_err(|_| NitroError::SignatureFailedToVerify)?;
         }
         _ => {
-            return Err(
-                NitroError::InvalidCertificate("Invalid public key type".to_string()).into(),
-            );
+            return Err(NitroError::InvalidPublicKey.into());
         }
     }
 
@@ -112,9 +117,6 @@ pub fn attestation_verify_inner(
         return Err(NitroError::InvalidUserData.into());
     }
 
-    // Verify the pcrs.
-    doc.validate_pcrs(expected_pcrs)
-        .map_err(|_| NitroError::InvalidPcrs)?;
     Ok(())
 }
 
@@ -526,46 +528,16 @@ impl AttestationDocument {
 
     /// Verify the certificate against AWS Nitro root of trust and checks expiry.
     fn validate_cert(&self, now: u64) -> Result<(), NitroError> {
-        let mut cert_chain: Vec<CertificateDer<'static>> = Vec::new();
-        for ca_cert in self.cabundle.iter().rev() {
-            cert_chain.push(CertificateDer::from(ca_cert.to_vec()));
-        }
-
-        let leaf_cert = CertificateDer::from(self.certificate.clone());
-        cert_chain.push(leaf_cert.clone());
-
-        // Setup root store with AWS Nitro root certificate
-        let mut root_store = RootCertStore::empty();
-        let mut pem_cursor = std::io::Cursor::new(ROOT_CERTIFICATE_PEM);
-        let certs: Vec<_> = rustls_pemfile::certs(&mut pem_cursor)
-            .collect::<Result<_, _>>()
-            .map_err(|e| {
-                NitroError::InvalidCertificate(format!("Failed to parse root certificate: {}", e))
-            })?;
-        let root_cert = certs
-            .into_iter()
-            .next()
-            .ok_or_else(|| NitroError::InvalidCertificate("No certificates found".to_string()))?;
-        root_store
-            .add(root_cert)
-            .map_err(|e| NitroError::InvalidCertificate(e.to_string()))?;
-        let verifier = WebPkiClientVerifier::builder(root_store.into())
-            .build()
-            .map_err(|e| NitroError::InvalidCertificate(e.to_string()))?;
-
-        verifier
-            .verify_client_cert(
-                &leaf_cert,
-                &cert_chain,
-                UnixTime::since_unix_epoch(Duration::from_millis(now)),
-            )
-            .map_err(|e| NitroError::InvalidCertificate(e.to_string()))?;
-        Ok(())
+        // Create chain starting with leaf cert all the way to root.
+        let mut chain = Vec::with_capacity(1 + self.cabundle.len());
+        chain.push(self.certificate.as_slice());
+        chain.extend(self.cabundle.iter().rev().map(|cert| cert.as_slice()));
+        validate_cert_chain(&chain, now)
     }
 
     /// Validate the PCRs against the expected PCRs.
     fn validate_pcrs(&self, expected_pcrs: &[&[u8]]) -> Result<(), NitroError> {
-        if expected_pcrs.is_empty() {
+        if expected_pcrs.is_empty() || expected_pcrs.len() > 32 {
             return Err(NitroError::InvalidPcrs);
         }
         for (i, expected_pcr) in expected_pcrs.iter().enumerate() {
@@ -575,4 +547,76 @@ impl AttestationDocument {
         }
         Ok(())
     }
+}
+
+/// Validate the certificate chain against the root of trust.
+fn validate_cert_chain(cert_chain: &[&[u8]], now_ms: u64) -> Result<(), NitroError> {
+    if cert_chain.is_empty() || cert_chain.len() > 20 {
+        return Err(NitroError::InvalidCertificate(
+            "No certificate chain".to_string(),
+        ));
+    }
+
+    let root_cert = X509Certificate::from_der(ROOT_CERTIFICATE.as_slice())
+        .map_err(|e| NitroError::InvalidCertificate(e.to_string()))?
+        .1;
+    let now_secs = now_ms / 1000;
+
+    // Validate the chain starting from the leaf
+    for i in 0..cert_chain.len() {
+        let cert = X509Certificate::from_der(cert_chain[i])
+            .map_err(|e| NitroError::InvalidCertificate(e.to_string()))?
+            .1;
+
+        // Check timestamp in seconds.
+        if now_secs < cert.validity().not_before.timestamp() as u64 {
+            return Err(NitroError::InvalidCertificate(
+                "Certificate not yet valid".to_string(),
+            ));
+        }
+        if now_secs > cert.validity().not_after.timestamp() as u64 {
+            return Err(NitroError::InvalidCertificate(
+                "Certificate expired".to_string(),
+            ));
+        }
+
+        // Get issuer cert from either next in chain or root
+        let issuer_cert = if i < cert_chain.len() - 1 {
+            X509Certificate::from_der(cert_chain[i + 1])
+                .map_err(|e| NitroError::InvalidCertificate(e.to_string()))?
+                .1
+        } else {
+            root_cert.clone()
+        };
+
+        // Verify issuer/subject chaining.
+        if cert.issuer() != issuer_cert.subject() {
+            return Err(NitroError::InvalidCertificate(
+                "Certificate chain issuer mismatch".to_string(),
+            ));
+        }
+
+        // Verify certificate signature.
+        let verifying_key = match issuer_cert.public_key().parsed() {
+            Ok(PublicKey::EC(ec)) => VerifyingKey::from_sec1_bytes(ec.data()).map_err(|_| {
+                NitroError::InvalidCertificate("Invalid cert public key".to_string())
+            })?,
+            _ => {
+                return Err(NitroError::InvalidCertificate(
+                    "Invalid cert public key".to_string(),
+                ))
+            }
+        };
+
+        let signature = Signature::from_der(cert.signature_value.as_ref())
+            .map_err(|_| NitroError::InvalidCertificate("Invalid cert signature".to_string()))?;
+
+        verifying_key
+            .verify(cert.tbs_certificate.as_ref(), &signature)
+            .map_err(|_| {
+                NitroError::InvalidCertificate("Cert signature fails to verify".to_string())
+            })?;
+    }
+
+    Ok(())
 }

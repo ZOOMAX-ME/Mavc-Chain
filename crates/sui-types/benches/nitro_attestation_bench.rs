@@ -4,6 +4,10 @@
 use criterion::*;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::encoding::Hex;
+use p384::ecdsa::signature::Signer;
+use p384::ecdsa::signature::Verifier;
+use p384::ecdsa::{Signature, SigningKey, VerifyingKey};
+use rand::rngs::OsRng;
 use sui_types::nitro_attestation::attestation_verify_inner;
 
 fn nitro_attestation_benchmark(c: &mut Criterion) {
@@ -29,6 +33,18 @@ fn nitro_attestation_benchmark(c: &mut Criterion) {
         })
     });
 
+    let signing_key = SigningKey::random(&mut OsRng); // Generate a key for testing
+    let verifying_key = VerifyingKey::from(&signing_key);
+    let message = b"test message";
+    let signature: Signature = signing_key.sign(message);
+
+    group.bench_function("verify_p384", |b| {
+        b.iter(|| {
+            verifying_key
+                .verify(message, &signature)
+                .expect("signature should verify");
+        })
+    });
     group.finish();
 }
 
