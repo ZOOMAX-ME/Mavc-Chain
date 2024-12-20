@@ -3,10 +3,10 @@
 
 use serde::de::{MapAccess, Visitor};
 use serde::{ser::SerializeSeq, Deserialize, Deserializer, Serialize, Serializer};
-use serde_bytes::ByteBuf;
 use std::fmt;
 use std::time::Duration;
-use webpki::types::UnixTime;
+use x509_parser::public_key::PublicKey;
+use x509_parser::x509::SubjectPublicKeyInfo;
 
 use crate::error::{SuiError, SuiResult};
 
@@ -14,6 +14,7 @@ use ciborium::value::{Integer, Value};
 use p384::ecdsa::signature::Verifier;
 use p384::ecdsa::{Signature, VerifyingKey};
 use rustls::pki_types::CertificateDer;
+use rustls::pki_types::UnixTime;
 use rustls::server::WebPkiClientVerifier;
 use rustls::RootCertStore;
 use x509_parser::{certificate::X509Certificate, prelude::FromDer};
@@ -23,17 +24,18 @@ use x509_parser::{certificate::X509Certificate, prelude::FromDer};
 mod nitro_attestation_tests;
 
 const ROOT_CERTIFICATE_PEM: &[u8] = include_bytes!("./nitro_root_certificate.pem");
-const P384_PUBLIC_KEY_SIZE: usize = 97;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum NitroError {
     /// Invalid COSE_Sign1: {0}
     InvalidCoseSign1(String),
-    /// Invalid signature
+    /// Invalid signature.
     InvalidSignature,
+    /// Siganture failed to verify.
+    SignatureFailedToVerify,
     /// Invalid attestation document
     InvalidAttestationDoc(String),
-    /// Invalid user data
+    /// Invalid user data.
     InvalidUserData,
     /// Invalid certificate: {0}
     InvalidCertificate(String),
@@ -46,6 +48,7 @@ impl fmt::Display for NitroError {
         match self {
             NitroError::InvalidCoseSign1(msg) => write!(f, "InvalidCoseSign1: {}", msg),
             NitroError::InvalidSignature => write!(f, "InvalidSignature"),
+            NitroError::SignatureFailedToVerify => write!(f, "SignatureFailedToVerify"),
             NitroError::InvalidAttestationDoc(msg) => write!(f, "InvalidAttestationDoc: {}", msg),
             NitroError::InvalidCertificate(msg) => write!(f, "InvalidCertificate: {}", msg),
             NitroError::InvalidPcrs => write!(f, "InvalidPcrs"),
@@ -66,32 +69,42 @@ impl From<NitroError> for SuiError {
 pub fn attestation_verify_inner(
     attestation_bytes: &[u8],
     enclave_vk: &[u8],
-    pcrs: &[&[u8]],
+    expected_pcrs: &[&[u8]],
     timestamp: u64,
 ) -> SuiResult<()> {
     // Parse attestation into a valid cose sign1 object with valid header.
     let cose_sign1 = CoseSign1::parse_and_validate(attestation_bytes)?;
 
     // Parse attestation document payload and verify cert against AWS root of trust.
-    let doc =
-        AttestationDocument::parse_and_validate_payload(&cose_sign1.payload, timestamp, pcrs)?;
+    let doc = AttestationDocument::parse_and_validate_payload(
+        &cose_sign1.payload,
+        timestamp,
+        expected_pcrs,
+    )?;
 
     // Extract public key from cert and signature as P384.
-    let signature = Signature::from_slice(&cose_sign1.signature).expect("Invalid signature");
+    let signature =
+        Signature::from_slice(&cose_sign1.signature).map_err(|_| NitroError::InvalidSignature)?;
     let cert = X509Certificate::from_der(doc.certificate.as_slice())
         .map_err(|e| NitroError::InvalidCertificate(e.to_string()))?;
-    let pk_bytes = cert.1.public_key().raw;
-    if pk_bytes.len() < P384_PUBLIC_KEY_SIZE {
-        return Err(NitroError::InvalidCertificate("Invalid public key length".to_string()).into());
-    }
-    let public_key = &pk_bytes[pk_bytes.len() - P384_PUBLIC_KEY_SIZE..];
-    let verifying_key = VerifyingKey::from_sec1_bytes(public_key)
+    let pk_bytes = SubjectPublicKeyInfo::parsed(cert.1.public_key())
         .map_err(|err| NitroError::InvalidCertificate(err.to_string()))?;
 
-    // Verify the signature against the public key and the canonical message.
-    verifying_key
-        .verify(&cose_sign1.to_signed_message(), &signature)
-        .map_err(|_| NitroError::InvalidSignature)?;
+    // Verify the signature against the public key and the message.
+    match pk_bytes {
+        PublicKey::EC(ec) => {
+            let verifying_key = VerifyingKey::from_sec1_bytes(ec.data())
+                .map_err(|err| NitroError::InvalidCertificate(err.to_string()))?;
+            verifying_key
+                .verify(&cose_sign1.to_signed_message(), &signature)
+                .map_err(|_| NitroError::SignatureFailedToVerify)?;
+        }
+        _ => {
+            return Err(
+                NitroError::InvalidCertificate("Invalid public key type".to_string()).into(),
+            );
+        }
+    }
 
     // Verify the user data equals to the enclave public key.
     let user_data = doc.clone().user_data.ok_or(NitroError::InvalidUserData)?;
@@ -100,7 +113,7 @@ pub fn attestation_verify_inner(
     }
 
     // Verify the pcrs.
-    doc.validate_pcrs(pcrs)
+    doc.validate_pcrs(expected_pcrs)
         .map_err(|_| NitroError::InvalidPcrs)?;
     Ok(())
 }
@@ -113,15 +126,15 @@ pub fn attestation_verify_inner(
 #[derive(Debug, Clone)]
 pub struct CoseSign1 {
     /// protected: empty_or_serialized_map,
-    protected: ByteBuf,
+    protected: Vec<u8>,
     /// unprotected: HeaderMap
     unprotected: HeaderMap,
     /// payload: bstr
     /// The spec allows payload to be nil and transported separately, but it's not useful at the
-    /// moment, so this is just a ByteBuf for simplicity.
-    payload: ByteBuf,
+    /// moment, so this is just a Bytes for simplicity.
+    payload: Vec<u8>,
     /// signature: bstr
-    signature: ByteBuf,
+    signature: Vec<u8>,
 }
 
 /// Empty map wrapper for COSE headers
@@ -173,10 +186,10 @@ impl Serialize for CoseSign1 {
         S: Serializer,
     {
         let mut seq = serializer.serialize_seq(Some(4))?;
-        seq.serialize_element(&self.protected)?;
+        seq.serialize_element(&Value::Bytes(self.protected.to_vec()))?;
         seq.serialize_element(&self.unprotected)?;
-        seq.serialize_element(&self.payload)?;
-        seq.serialize_element(&self.signature)?;
+        seq.serialize_element(&Value::Bytes(self.payload.to_vec()))?;
+        seq.serialize_element(&Value::Bytes(self.signature.to_vec()))?;
         seq.end()
     }
 }
@@ -202,9 +215,17 @@ impl<'de> Deserialize<'de> for CoseSign1 {
             where
                 A: SeqAccess<'de>,
             {
-                // This is the untagged version
-                let protected = match seq.next_element()? {
-                    Some(v) => v,
+                fn extract_bytes(value: Value) -> Option<Vec<u8>> {
+                    match value {
+                        Value::Bytes(bytes) => Some(bytes),
+                        _ => None,
+                    }
+                }
+
+                // Get protected header bytes
+                let protected = match seq.next_element::<Value>()? {
+                    Some(v) => extract_bytes(v)
+                        .ok_or_else(|| A::Error::custom("protected header must be bytes"))?,
                     None => return Err(A::Error::missing_field("protected")),
                 };
 
@@ -212,12 +233,18 @@ impl<'de> Deserialize<'de> for CoseSign1 {
                     Some(v) => v,
                     None => return Err(A::Error::missing_field("unprotected")),
                 };
-                let payload = match seq.next_element()? {
-                    Some(v) => v,
+                // Get payload bytes
+                let payload = match seq.next_element::<Value>()? {
+                    Some(v) => {
+                        extract_bytes(v).ok_or_else(|| A::Error::custom("payload must be bytes"))?
+                    }
                     None => return Err(A::Error::missing_field("payload")),
                 };
-                let signature = match seq.next_element()? {
-                    Some(v) => v,
+
+                // Get signature bytes
+                let signature = match seq.next_element::<Value>()? {
+                    Some(v) => extract_bytes(v)
+                        .ok_or_else(|| A::Error::custom("signature must be bytes"))?,
                     None => return Err(A::Error::missing_field("signature")),
                 };
 
@@ -301,7 +328,10 @@ impl CoseSign1 {
     fn is_valid_protected_header(bytes: &[u8]) -> bool {
         let expected_key: Integer = Integer::from(1);
         let expected_val: Integer = Integer::from(-35);
-        let value: Value = ciborium::de::from_reader(bytes).expect("valid cbor");
+        let value: Value = match ciborium::de::from_reader(bytes) {
+            Ok(v) => v,
+            Err(_) => return false,
+        };
         match value {
             Value::Map(vec) => match &vec[..] {
                 [(Value::Integer(key), Value::Integer(val))] => {
@@ -343,7 +373,8 @@ struct AttestationDocument {
 }
 
 impl AttestationDocument {
-    /// Parse the payload of the attestation document, validate the cert based on timestamp, and the pcrs match. Adapted from https://github.com/EternisAI/remote-attestation-verifier/blob/main/src/lib.rs
+    /// Parse the payload of the attestation document, validate the cert based on timestamp, and the pcrs match.
+    /// Adapted from https://github.com/EternisAI/remote-attestation-verifier/blob/main/src/lib.rs
     pub fn parse_and_validate_payload(
         payload: &Vec<u8>,
         curr_timestamp: u64,
@@ -534,6 +565,9 @@ impl AttestationDocument {
 
     /// Validate the PCRs against the expected PCRs.
     fn validate_pcrs(&self, expected_pcrs: &[&[u8]]) -> Result<(), NitroError> {
+        if expected_pcrs.is_empty() {
+            return Err(NitroError::InvalidPcrs);
+        }
         for (i, expected_pcr) in expected_pcrs.iter().enumerate() {
             if self.pcrs[i] != *expected_pcr {
                 return Err(NitroError::InvalidPcrs);

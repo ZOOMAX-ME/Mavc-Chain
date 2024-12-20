@@ -15780,7 +15780,6 @@ dependencies = [
  "roaring",
  "rustls 0.23.12",
  "rustls-pemfile 2.1.2",
- "rustls-webpki 0.102.6",
  "schemars",
  "serde",
  "serde-name",
