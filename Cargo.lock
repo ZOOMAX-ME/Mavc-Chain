@@ -675,7 +675,7 @@ dependencies = [
  "arrow-schema",
  "chrono",
  "half 2.3.1",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "lexical-core",
  "num",
  "serde",
@@ -875,7 +875,7 @@ dependencies = [
  "futures-util",
  "handlebars",
  "http 1.1.0",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "lru 0.7.8",
  "mime",
  "multer",
@@ -921,7 +921,7 @@ dependencies = [
  "Inflector",
  "async-graphql-parser",
  "darling 0.20.3",
- "proc-macro-crate",
+ "proc-macro-crate 1.1.3",
  "proc-macro2 1.0.87",
  "quote 1.0.37",
  "strum 0.25.0",
@@ -948,7 +948,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7cf4d4e86208f4f9b81a503943c07e6e7f29ad3505e6c9ce6431fe64dc241681"
 dependencies = [
  "bytes",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "serde",
  "serde_json",
 ]
@@ -3403,7 +3403,7 @@ version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "718f6cd8c54ae5249fd42b0c86639df0100b8a86eea2e5f1b915cde2e1481453"
 dependencies = [
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "lalrpop-util",
  "logos",
 ]
@@ -5479,7 +5479,7 @@ dependencies = [
  "fixedbitset 0.4.2",
  "guppy-summaries",
  "guppy-workspace-hack",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "itertools 0.13.0",
  "nested",
  "once_cell",
@@ -5528,7 +5528,7 @@ dependencies = [
  "futures-sink",
  "futures-util",
  "http 0.2.9",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "slab",
  "tokio",
  "tokio-util 0.7.10",
@@ -5547,7 +5547,7 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "http 1.1.0",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "slab",
  "tokio",
  "tokio-util 0.7.10",
@@ -5641,6 +5641,12 @@ dependencies = [
  "ahash 0.8.11",
  "allocator-api2",
 ]
+
+[[package]]
+name = "hashbrown"
+version = "0.15.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf151400ff0baff5465007dd2f3e717f3fe502074ca563069ce3a6629d07b289"
 
 [[package]]
 name = "hashers"
@@ -6339,12 +6345,12 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "2.2.6"
+version = "2.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "168fb715dda47215e360912c096649d23d58bf392ac62f73919e831745e40f26"
+checksum = "62f822373a4fe84d4bb149bf54e584a7f4abec90e072ed49cda0edea5b95471f"
 dependencies = [
  "equivalent",
- "hashbrown 0.14.1",
+ "hashbrown 0.15.2",
  "serde",
 ]
 
@@ -6652,12 +6658,26 @@ name = "jsonrpsee"
 version = "0.16.2"
 source = "git+https://github.com/wlmyng/jsonrpsee.git?rev=b1b300784795f6a64d0fcdf8f03081a9bc38bde8#b1b300784795f6a64d0fcdf8f03081a9bc38bde8"
 dependencies = [
- "jsonrpsee-core",
+ "jsonrpsee-core 0.16.2",
  "jsonrpsee-http-client",
- "jsonrpsee-proc-macros",
- "jsonrpsee-server",
- "jsonrpsee-types",
+ "jsonrpsee-proc-macros 0.16.2",
+ "jsonrpsee-server 0.16.2",
+ "jsonrpsee-types 0.16.2",
  "jsonrpsee-ws-client",
+ "tracing",
+]
+
+[[package]]
+name = "jsonrpsee"
+version = "0.24.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c5c71d8c1a731cc4227c2f698d377e7848ca12c8a48866fc5e6951c43a4db843"
+dependencies = [
+ "jsonrpsee-core 0.24.7",
+ "jsonrpsee-proc-macros 0.24.7",
+ "jsonrpsee-server 0.24.7",
+ "jsonrpsee-types 0.24.7",
+ "tokio",
  "tracing",
 ]
 
@@ -6668,11 +6688,11 @@ source = "git+https://github.com/wlmyng/jsonrpsee.git?rev=b1b300784795f6a64d0fcd
 dependencies = [
  "futures-util",
  "http 0.2.9",
- "jsonrpsee-core",
- "jsonrpsee-types",
+ "jsonrpsee-core 0.16.2",
+ "jsonrpsee-types 0.16.2",
  "pin-project",
  "rustls-native-certs 0.6.2",
- "soketto",
+ "soketto 0.7.1",
  "thiserror",
  "tokio",
  "tokio-rustls 0.23.4",
@@ -6696,13 +6716,36 @@ dependencies = [
  "futures-util",
  "globset",
  "hyper 0.14.26",
- "jsonrpsee-types",
+ "jsonrpsee-types 0.16.2",
  "parking_lot 0.12.1",
  "rand 0.8.5",
  "rustc-hash 1.1.0",
  "serde",
  "serde_json",
- "soketto",
+ "soketto 0.7.1",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "jsonrpsee-core"
+version = "0.24.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2882f6f8acb9fdaec7cefc4fd607119a9bd709831df7d7672a1d3b644628280"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "futures-util",
+ "http 1.1.0",
+ "http-body 1.0.1",
+ "http-body-util",
+ "jsonrpsee-types 0.24.7",
+ "parking_lot 0.12.1",
+ "rand 0.8.5",
+ "rustc-hash 2.0.0",
+ "serde",
+ "serde_json",
  "thiserror",
  "tokio",
  "tracing",
@@ -6716,8 +6759,8 @@ dependencies = [
  "async-trait",
  "hyper 0.14.26",
  "hyper-rustls 0.23.2",
- "jsonrpsee-core",
- "jsonrpsee-types",
+ "jsonrpsee-core 0.16.2",
+ "jsonrpsee-types 0.16.2",
  "rustc-hash 1.1.0",
  "serde",
  "serde_json",
@@ -6732,10 +6775,23 @@ version = "0.16.2"
 source = "git+https://github.com/wlmyng/jsonrpsee.git?rev=b1b300784795f6a64d0fcdf8f03081a9bc38bde8#b1b300784795f6a64d0fcdf8f03081a9bc38bde8"
 dependencies = [
  "heck 0.4.1",
- "proc-macro-crate",
+ "proc-macro-crate 1.1.3",
  "proc-macro2 1.0.87",
  "quote 1.0.37",
  "syn 1.0.107",
+]
+
+[[package]]
+name = "jsonrpsee-proc-macros"
+version = "0.24.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c06c01ae0007548e73412c08e2285ffe5d723195bf268bce67b1b77c3bb2a14d"
+dependencies = [
+ "heck 0.5.0",
+ "proc-macro-crate 3.2.0",
+ "proc-macro2 1.0.87",
+ "quote 1.0.37",
+ "syn 2.0.79",
 ]
 
 [[package]]
@@ -6747,11 +6803,38 @@ dependencies = [
  "futures-util",
  "http 0.2.9",
  "hyper 0.14.26",
- "jsonrpsee-core",
- "jsonrpsee-types",
+ "jsonrpsee-core 0.16.2",
+ "jsonrpsee-types 0.16.2",
  "serde",
  "serde_json",
- "soketto",
+ "soketto 0.7.1",
+ "tokio",
+ "tokio-stream",
+ "tokio-util 0.7.10",
+ "tower 0.4.13",
+ "tracing",
+]
+
+[[package]]
+name = "jsonrpsee-server"
+version = "0.24.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "82ad8ddc14be1d4290cd68046e7d1d37acd408efed6d3ca08aefcc3ad6da069c"
+dependencies = [
+ "futures-util",
+ "http 1.1.0",
+ "http-body 1.0.1",
+ "http-body-util",
+ "hyper 1.4.1",
+ "hyper-util",
+ "jsonrpsee-core 0.24.7",
+ "jsonrpsee-types 0.24.7",
+ "pin-project",
+ "route-recognizer",
+ "serde",
+ "serde_json",
+ "soketto 0.8.1",
+ "thiserror",
  "tokio",
  "tokio-stream",
  "tokio-util 0.7.10",
@@ -6773,14 +6856,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonrpsee-types"
+version = "0.24.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a178c60086f24cc35bb82f57c651d0d25d99c4742b4d335de04e97fa1f08a8a1"
+dependencies = [
+ "http 1.1.0",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "jsonrpsee-ws-client"
 version = "0.16.2"
 source = "git+https://github.com/wlmyng/jsonrpsee.git?rev=b1b300784795f6a64d0fcdf8f03081a9bc38bde8#b1b300784795f6a64d0fcdf8f03081a9bc38bde8"
 dependencies = [
  "http 0.2.9",
  "jsonrpsee-client-transport",
- "jsonrpsee-core",
- "jsonrpsee-types",
+ "jsonrpsee-core 0.16.2",
+ "jsonrpsee-types 0.16.2",
 ]
 
 [[package]]
@@ -7599,7 +7694,7 @@ name = "move-bytecode-utils"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "move-binary-format",
  "move-core-types",
  "petgraph 0.5.1",
@@ -7807,7 +7902,7 @@ dependencies = [
  "clap",
  "codespan",
  "colored",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "move-abstract-interpreter",
  "move-binary-format",
  "move-bytecode-source-map",
@@ -8397,7 +8492,7 @@ version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d6d4752e6230d8ef7adf7bd5d8c4b1f6561c1014c5ba9a37445ccefe18aa1db"
 dependencies = [
- "proc-macro-crate",
+ "proc-macro-crate 1.1.3",
  "proc-macro-error",
  "proc-macro2 1.0.87",
  "quote 1.0.37",
@@ -8507,7 +8602,7 @@ dependencies = [
  "fastcrypto-tbls",
  "hashbrown 0.12.3",
  "impl-trait-for-tuples",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "mysten-util-mem-derive",
  "once_cell",
  "parking_lot 0.12.1",
@@ -8752,7 +8847,7 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "066b468120587a402f0b47d8f80035c921f6a46f8209efd0632a89a16f5188a4"
 dependencies = [
- "proc-macro-crate",
+ "proc-macro-crate 1.1.3",
  "proc-macro2 1.0.87",
  "quote 1.0.37",
  "syn 1.0.107",
@@ -8953,7 +9048,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96667db765a921f7b295ffee8b60472b686a51d4f21c2ee4ffdb94c7013b65a6"
 dependencies = [
- "proc-macro-crate",
+ "proc-macro-crate 1.1.3",
  "proc-macro2 1.0.87",
  "quote 1.0.37",
  "syn 2.0.79",
@@ -8965,7 +9060,7 @@ version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af1844ef2428cc3e1cb900be36181049ef3d3193c63e43026cfe202983b27a56"
 dependencies = [
- "proc-macro-crate",
+ "proc-macro-crate 1.1.3",
  "proc-macro2 1.0.87",
  "quote 1.0.37",
  "syn 2.0.79",
@@ -9094,7 +9189,7 @@ name = "openapiv3"
 version = "2.0.0"
 source = "git+https://github.com/bmwill/openapiv3.git?rev=ca4b4845b7c159a39f5c68ad8f7f76cb6f4d6963#ca4b4845b7c159a39f5c68ad8f7f76cb6f4d6963"
 dependencies = [
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "schemars",
  "serde",
  "serde_json",
@@ -9114,7 +9209,7 @@ checksum = "1e32339a5dc40459130b3bd269e9892439f55b33e772d2a9d402a789baaf4e8a"
 dependencies = [
  "futures-core",
  "futures-sink",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "js-sys",
  "once_cell",
  "pin-project-lite",
@@ -9363,7 +9458,7 @@ version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1557010476e0595c9b568d16dcfb81b93cdeb157612726f5170d31aa707bed27"
 dependencies = [
- "proc-macro-crate",
+ "proc-macro-crate 1.1.3",
  "proc-macro2 1.0.87",
  "quote 1.0.37",
  "syn 1.0.107",
@@ -9375,7 +9470,7 @@ version = "3.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "312270ee71e1cd70289dacf597cab7b207aa107d2f28191c2ae45b2ece18a260"
 dependencies = [
- "proc-macro-crate",
+ "proc-macro-crate 1.1.3",
  "proc-macro2 1.0.87",
  "quote 1.0.37",
  "syn 1.0.107",
@@ -9510,7 +9605,7 @@ dependencies = [
  "ciborium",
  "coset",
  "data-encoding",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -9701,7 +9796,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4c5cc86750666a3ed20bdaf5ca2a0344f9c67674cae0515bec2da16fbaa47db"
 dependencies = [
  "fixedbitset 0.4.2",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
 ]
 
 [[package]]
@@ -10080,6 +10175,15 @@ checksum = "e17d47ce914bf4de440332250b0edd23ce48c005f59fab39d3335866b114f11a"
 dependencies = [
  "thiserror",
  "toml 0.5.11",
+]
+
+[[package]]
+name = "proc-macro-crate"
+version = "3.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8ecf48c7ca261d60b74ab1a7b20da18bede46776b2e55535cb958eb595c5fa7b"
+dependencies = [
+ "toml_edit 0.22.22",
 ]
 
 [[package]]
@@ -11035,6 +11139,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "route-recognizer"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "afab94fb28594581f62d981211a9a4d53cc8130bbcbbb89a0440d9b8e81a7746"
+
+[[package]]
 name = "rsa"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11564,7 +11674,7 @@ version = "2.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "abf2c68b89cafb3b8d918dd07b42be0da66ff202cf1155c5739a4e0c1ea0dc19"
 dependencies = [
- "proc-macro-crate",
+ "proc-macro-crate 1.1.3",
  "proc-macro2 1.0.87",
  "quote 1.0.37",
  "syn 1.0.107",
@@ -11866,7 +11976,7 @@ version = "1.0.128"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ff5456707a1de34e7e37f2a6fd3d3f808c318259cbd01ab6377795054b483d8"
 dependencies = [
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "itoa",
  "memchr",
  "ryu",
@@ -11951,7 +12061,7 @@ dependencies = [
  "chrono",
  "hex",
  "indexmap 1.9.3",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "serde",
  "serde_derive",
  "serde_json",
@@ -12420,6 +12530,22 @@ dependencies = [
  "log",
  "rand 0.8.5",
  "sha-1 0.9.8",
+]
+
+[[package]]
+name = "soketto"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e859df029d160cb88608f5d7df7fb4753fd20fdfb4de5644f3d8b8440841721"
+dependencies = [
+ "base64 0.22.1",
+ "bytes",
+ "futures",
+ "http 1.1.0",
+ "httparse",
+ "log",
+ "rand 0.8.5",
+ "sha1",
 ]
 
 [[package]]
@@ -13203,7 +13329,7 @@ dependencies = [
  "derive_more 1.0.0",
  "fastcrypto",
  "futures",
- "jsonrpsee",
+ "jsonrpsee 0.16.2",
  "move-core-types",
  "prometheus",
  "regex",
@@ -13293,9 +13419,9 @@ dependencies = [
  "fs_extra",
  "futures",
  "im",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "itertools 0.13.0",
- "jsonrpsee",
+ "jsonrpsee 0.16.2",
  "lru 0.10.0",
  "mockall",
  "moka",
@@ -13507,9 +13633,9 @@ dependencies = [
  "fastcrypto-zkp",
  "fs_extra",
  "futures",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "insta",
- "jsonrpsee",
+ "jsonrpsee 0.16.2",
  "move-binary-format",
  "move-core-types",
  "move-package",
@@ -13915,7 +14041,7 @@ dependencies = [
  "hex",
  "indicatif",
  "itertools 0.13.0",
- "jsonrpsee",
+ "jsonrpsee 0.16.2",
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
@@ -14045,7 +14171,7 @@ dependencies = [
  "clap",
  "diesel",
  "diesel-async",
- "jsonrpsee",
+ "jsonrpsee 0.24.7",
  "sui-indexer-alt-schema",
  "sui-pg-db",
  "sui-types",
@@ -14125,9 +14251,9 @@ dependencies = [
  "futures",
  "http-body 0.4.5",
  "hyper 1.4.1",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "itertools 0.13.0",
- "jsonrpsee",
+ "jsonrpsee 0.16.2",
  "mockall",
  "move-binary-format",
  "move-bytecode-utils",
@@ -14170,7 +14296,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "fastcrypto",
- "jsonrpsee",
+ "jsonrpsee 0.16.2",
  "mysten-metrics",
  "once_cell",
  "prometheus",
@@ -14191,7 +14317,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "hyper 1.4.1",
- "jsonrpsee",
+ "jsonrpsee 0.16.2",
  "move-core-types",
  "move-package",
  "prometheus",
@@ -14363,7 +14489,7 @@ dependencies = [
  "colored",
  "futures",
  "jemalloc-ctl",
- "jsonrpsee",
+ "jsonrpsee 0.16.2",
  "move-binary-format",
  "move-cli",
  "move-compiler",
@@ -14436,7 +14562,7 @@ dependencies = [
  "fastcrypto",
  "fastcrypto-vdf",
  "fastcrypto-zkp",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "move-binary-format",
  "move-core-types",
  "move-stdlib-natives",
@@ -14497,7 +14623,7 @@ dependencies = [
  "better_any",
  "fastcrypto",
  "fastcrypto-zkp",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "move-binary-format",
  "move-core-types",
  "move-stdlib-natives-v2",
@@ -14614,7 +14740,7 @@ dependencies = [
  "hex",
  "indicatif",
  "itertools 0.13.0",
- "jsonrpsee",
+ "jsonrpsee 0.16.2",
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
@@ -14987,7 +15113,7 @@ dependencies = [
  "clap",
  "futures",
  "http 1.1.0",
- "jsonrpsee",
+ "jsonrpsee 0.16.2",
  "lru 0.10.0",
  "move-binary-format",
  "move-bytecode-utils",
@@ -15161,7 +15287,7 @@ dependencies = [
  "fastcrypto",
  "futures",
  "futures-core",
- "jsonrpsee",
+ "jsonrpsee 0.16.2",
  "move-core-types",
  "rand 0.8.5",
  "reqwest 0.12.5",
@@ -15357,7 +15483,7 @@ dependencies = [
  "expect-test",
  "fs_extra",
  "hyper 1.4.1",
- "jsonrpsee",
+ "jsonrpsee 0.16.2",
  "move-compiler",
  "move-core-types",
  "move-package",
@@ -15448,7 +15574,7 @@ dependencies = [
  "bcs",
  "clap",
  "futures",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "move-binary-format",
  "move-core-types",
  "move-package",
@@ -15736,7 +15862,7 @@ dependencies = [
  "fastcrypto-tbls",
  "fastcrypto-zkp",
  "im",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "itertools 0.13.0",
  "lru 0.10.0",
  "move-binary-format",
@@ -16261,7 +16387,7 @@ dependencies = [
  "fastcrypto",
  "fastcrypto-zkp",
  "futures",
- "jsonrpsee",
+ "jsonrpsee 0.16.2",
  "move-binary-format",
  "prometheus",
  "rand 0.8.5",
@@ -16767,7 +16893,7 @@ dependencies = [
  "serde",
  "serde_spanned",
  "toml_datetime 0.6.8",
- "toml_edit 0.22.17",
+ "toml_edit 0.22.22",
 ]
 
 [[package]]
@@ -16824,11 +16950,11 @@ dependencies = [
 
 [[package]]
 name = "toml_edit"
-version = "0.22.17"
+version = "0.22.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d9f8729f5aea9562aac1cc0441f5d6de3cff1ee0c5d67293eeca5eb36ee7c16"
+checksum = "4ae48d6208a266e853d946088ed816055e556cc6028c5e8e2b84d9fa5dd7c7f5"
 dependencies = [
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "serde",
  "serde_spanned",
  "toml_datetime 0.6.8",
@@ -17004,7 +17130,7 @@ checksum = "2873938d487c3cfb9aed7546dc9f2711d867c9f90c46b889989a2cb84eba6b4f"
 dependencies = [
  "futures-core",
  "futures-util",
- "indexmap 2.2.6",
+ "indexmap 2.7.0",
  "pin-project-lite",
  "slab",
  "sync_wrapper 0.1.2",
