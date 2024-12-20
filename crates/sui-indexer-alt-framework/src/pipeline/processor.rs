@@ -27,6 +27,10 @@ pub trait Processor {
     /// How much concurrency to use when processing checkpoint data.
     const FANOUT: usize = 10;
 
+    /// Whether the pruner requires processed values in order to prune.
+    /// This will determine the first checkpoint to process when we start the pipeline.
+    const PRUNING_REQUIRES_PROCESSED_VALUES: bool = false;
+
     /// The type of value being inserted by the handler.
     type Value: Send + Sync + 'static;
 
