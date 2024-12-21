@@ -67,7 +67,7 @@ pub struct Indexer {
     /// Prometheus Metrics.
     metrics: Arc<IndexerMetrics>,
 
-    /// Service for serving Prometheis metrics.
+    /// Service for serving Prometheus metrics.
     metrics_service: MetricsService,
 
     /// Service for downloading and disseminating checkpoint data.
