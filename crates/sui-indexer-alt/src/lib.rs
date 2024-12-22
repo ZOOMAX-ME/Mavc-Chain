@@ -16,6 +16,7 @@ use handlers::{
     tx_affected_objects::TxAffectedObjects, tx_balance_changes::TxBalanceChanges,
     tx_calls::TxCalls, tx_digests::TxDigests, tx_kinds::TxKinds,
 };
+use prometheus::Registry;
 use sui_indexer_alt_framework::ingestion::{ClientArgs, IngestionConfig};
 use sui_indexer_alt_framework::pipeline::{
     concurrent::{ConcurrentConfig, PrunerConfig},
@@ -25,6 +26,7 @@ use sui_indexer_alt_framework::pipeline::{
 use sui_indexer_alt_framework::{Indexer, IndexerArgs};
 use sui_indexer_alt_schema::MIGRATIONS;
 use sui_pg_db::DbArgs;
+use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 pub mod args;
@@ -45,7 +47,9 @@ pub async fn start_indexer(
     // TODO: There is probably a better way to handle this.
     // For instance, we could also pass in dummy genesis data in the benchmark mode.
     with_genesis: bool,
-) -> anyhow::Result<()> {
+    registry: &Registry,
+    cancel: CancellationToken,
+) -> anyhow::Result<JoinHandle<()>> {
     let IndexerConfig {
         ingestion,
         consistency,
@@ -86,7 +90,6 @@ pub async fn start_indexer(
     let committer = committer.finish(CommitterConfig::default());
     let pruner = pruner.finish(PrunerConfig::default());
 
-    let cancel = CancellationToken::new();
     let retry_interval = ingestion.retry_interval();
 
     let mut indexer = Indexer::new(
@@ -95,6 +98,7 @@ pub async fn start_indexer(
         client_args,
         ingestion,
         &MIGRATIONS,
+        registry,
         cancel.clone(),
     )
     .await?;
@@ -216,9 +220,5 @@ pub async fn start_indexer(
     add_concurrent!(TxDigests, tx_digests);
     add_concurrent!(TxKinds, tx_kinds);
 
-    let h_indexer = indexer.run().await.context("Failed to start indexer")?;
-
-    cancel.cancelled().await;
-    let _ = h_indexer.await;
-    Ok(())
+    indexer.run().await.context("Failed to start indexer")
 }

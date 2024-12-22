@@ -14108,11 +14108,13 @@ dependencies = [
  "futures",
  "hex",
  "itertools 0.13.0",
+ "prometheus",
  "rand 0.8.5",
  "serde",
  "sui-default-config",
  "sui-field-count",
  "sui-indexer-alt-framework",
+ "sui-indexer-alt-metrics",
  "sui-indexer-alt-schema",
  "sui-pg-db",
  "sui-protocol-config",
@@ -14188,6 +14190,19 @@ dependencies = [
  "tower-layer",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "sui-indexer-alt-metrics"
+version = "1.40.0"
+dependencies = [
+ "anyhow",
+ "axum 0.7.5",
+ "clap",
+ "prometheus",
+ "tokio",
+ "tokio-util 0.7.10",
+ "tracing",
 ]
 
 [[package]]

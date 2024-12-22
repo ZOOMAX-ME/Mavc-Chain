@@ -232,7 +232,10 @@ mod tests {
     use sui_pg_db as db;
     use sui_types::full_checkpoint_content::CheckpointData;
 
-    use crate::pipeline::{concurrent::max_chunk_rows, Processor};
+    use crate::{
+        metrics::tests::test_metrics,
+        pipeline::{concurrent::max_chunk_rows, Processor},
+    };
 
     use super::*;
 
@@ -244,7 +247,6 @@ mod tests {
         const FIELD_COUNT: usize = 32;
     }
 
-    use prometheus::Registry;
     use std::time::Duration;
     use tokio::sync::mpsc;
 
@@ -351,7 +353,6 @@ mod tests {
     async fn test_collector_batches_data() {
         let (processor_tx, processor_rx) = mpsc::channel(10);
         let (collector_tx, mut collector_rx) = mpsc::channel(10);
-        let metrics = Arc::new(IndexerMetrics::new(&Registry::new()));
         let cancel = CancellationToken::new();
 
         let _collector = collector::<TestHandler>(
@@ -359,7 +360,7 @@ mod tests {
             None,
             processor_rx,
             collector_tx,
-            metrics,
+            test_metrics(),
             cancel.clone(),
         );
 
@@ -394,7 +395,6 @@ mod tests {
     async fn test_collector_shutdown() {
         let (processor_tx, processor_rx) = mpsc::channel(10);
         let (collector_tx, mut collector_rx) = mpsc::channel(10);
-        let metrics = Arc::new(IndexerMetrics::new(&Registry::new()));
         let cancel = CancellationToken::new();
 
         let collector = collector::<TestHandler>(
@@ -402,7 +402,7 @@ mod tests {
             None,
             processor_rx,
             collector_tx,
-            metrics,
+            test_metrics(),
             cancel.clone(),
         );
 
@@ -434,8 +434,7 @@ mod tests {
         let (processor_tx, processor_rx) = mpsc::channel(processor_channel_size);
         let (collector_tx, _collector_rx) = mpsc::channel(collector_channel_size);
 
-        let metrics = Arc::new(IndexerMetrics::new(&Registry::new()));
-
+        let metrics = test_metrics();
         let cancel = CancellationToken::new();
 
         let _collector = collector::<TestHandler>(
