@@ -5,6 +5,7 @@ use serde::de::{MapAccess, Visitor};
 use serde::{ser::SerializeSeq, Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use x509_parser::public_key::PublicKey;
+use x509_parser::time::ASN1Time;
 use x509_parser::x509::SubjectPublicKeyInfo;
 
 use crate::error::{SuiError, SuiResult};
@@ -19,6 +20,10 @@ use x509_parser::{certificate::X509Certificate, prelude::FromDer};
 #[path = "unit_tests/nitro_attestation_tests.rs"]
 mod nitro_attestation_tests;
 
+/// Maximum length of the certificate chain. This is to limit the absolute upper bound on execution.
+const MAX_CERT_CHAIN_LENGTH: usize = 10;
+
+/// Root certificate for AWS Nitro Attestation.
 static ROOT_CERTIFICATE: Lazy<Vec<u8>> = Lazy::new(|| {
     let pem_bytes = include_bytes!("./nitro_root_certificate.pem");
     let mut pem_cursor = std::io::Cursor::new(pem_bytes);
@@ -29,15 +34,16 @@ static ROOT_CERTIFICATE: Lazy<Vec<u8>> = Lazy::new(|| {
     cert.to_vec()
 });
 
+/// Error type for Nitro attestation verification.
 #[derive(Debug, PartialEq, Eq)]
-pub enum NitroError {
+pub enum NitroAttestationVerifyError {
     /// Invalid COSE_Sign1: {0}
     InvalidCoseSign1(String),
-    /// Invalid signature.
+    /// Invalid signature
     InvalidSignature,
-    /// Invalid public key.
+    /// Invalid public key
     InvalidPublicKey,
-    /// Siganture failed to verify.
+    /// Siganture failed to verify
     SignatureFailedToVerify,
     /// Invalid attestation document
     InvalidAttestationDoc(String),
@@ -49,23 +55,31 @@ pub enum NitroError {
     InvalidPcrs,
 }
 
-impl fmt::Display for NitroError {
+impl fmt::Display for NitroAttestationVerifyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            NitroError::InvalidCoseSign1(msg) => write!(f, "InvalidCoseSign1: {}", msg),
-            NitroError::InvalidSignature => write!(f, "InvalidSignature"),
-            NitroError::InvalidPublicKey => write!(f, "InvalidPublicKey"),
-            NitroError::SignatureFailedToVerify => write!(f, "SignatureFailedToVerify"),
-            NitroError::InvalidAttestationDoc(msg) => write!(f, "InvalidAttestationDoc: {}", msg),
-            NitroError::InvalidCertificate(msg) => write!(f, "InvalidCertificate: {}", msg),
-            NitroError::InvalidPcrs => write!(f, "InvalidPcrs"),
-            NitroError::InvalidUserData => write!(f, "InvalidUserData"),
+            NitroAttestationVerifyError::InvalidCoseSign1(msg) => {
+                write!(f, "InvalidCoseSign1: {}", msg)
+            }
+            NitroAttestationVerifyError::InvalidSignature => write!(f, "InvalidSignature"),
+            NitroAttestationVerifyError::InvalidPublicKey => write!(f, "InvalidPublicKey"),
+            NitroAttestationVerifyError::SignatureFailedToVerify => {
+                write!(f, "SignatureFailedToVerify")
+            }
+            NitroAttestationVerifyError::InvalidAttestationDoc(msg) => {
+                write!(f, "InvalidAttestationDoc: {}", msg)
+            }
+            NitroAttestationVerifyError::InvalidCertificate(msg) => {
+                write!(f, "InvalidCertificate: {}", msg)
+            }
+            NitroAttestationVerifyError::InvalidPcrs => write!(f, "InvalidPcrs"),
+            NitroAttestationVerifyError::InvalidUserData => write!(f, "InvalidUserData"),
         }
     }
 }
 
-impl From<NitroError> for SuiError {
-    fn from(err: NitroError) -> Self {
+impl From<NitroAttestationVerifyError> for SuiError {
+    fn from(err: NitroAttestationVerifyError) -> Self {
         SuiError::AttestationFailedToVerify(err.to_string())
     }
 }
@@ -90,31 +104,34 @@ pub fn attestation_verify_inner(
     )?;
 
     // Extract public key from cert and signature as P384.
-    let signature =
-        Signature::from_slice(&cose_sign1.signature).map_err(|_| NitroError::InvalidSignature)?;
+    let signature = Signature::from_slice(&cose_sign1.signature)
+        .map_err(|_| NitroAttestationVerifyError::InvalidSignature)?;
     let cert = X509Certificate::from_der(doc.certificate.as_slice())
-        .map_err(|e| NitroError::InvalidCertificate(e.to_string()))?;
+        .map_err(|e| NitroAttestationVerifyError::InvalidCertificate(e.to_string()))?;
     let pk_bytes = SubjectPublicKeyInfo::parsed(cert.1.public_key())
-        .map_err(|err| NitroError::InvalidCertificate(err.to_string()))?;
+        .map_err(|err| NitroAttestationVerifyError::InvalidCertificate(err.to_string()))?;
 
     // Verify the signature against the public key and the message.
     match pk_bytes {
         PublicKey::EC(ec) => {
             let verifying_key = VerifyingKey::from_sec1_bytes(ec.data())
-                .map_err(|_| NitroError::InvalidPublicKey)?;
+                .map_err(|_| NitroAttestationVerifyError::InvalidPublicKey)?;
             verifying_key
                 .verify(&cose_sign1.to_signed_message(), &signature)
-                .map_err(|_| NitroError::SignatureFailedToVerify)?;
+                .map_err(|_| NitroAttestationVerifyError::SignatureFailedToVerify)?;
         }
         _ => {
-            return Err(NitroError::InvalidPublicKey.into());
+            return Err(NitroAttestationVerifyError::InvalidPublicKey.into());
         }
     }
 
     // Verify the user data equals to the enclave public key.
-    let user_data = doc.clone().user_data.ok_or(NitroError::InvalidUserData)?;
+    let user_data = doc
+        .clone()
+        .user_data
+        .ok_or(NitroAttestationVerifyError::InvalidUserData)?;
     if user_data != enclave_vk {
-        return Err(NitroError::InvalidUserData.into());
+        return Err(NitroAttestationVerifyError::InvalidUserData.into());
     }
 
     Ok(())
@@ -139,7 +156,7 @@ pub struct CoseSign1 {
     signature: Vec<u8>,
 }
 
-/// Empty map wrapper for COSE headers
+/// Empty map wrapper for COSE headers.
 #[derive(Clone, Debug, Default)]
 pub struct HeaderMap;
 
@@ -273,9 +290,9 @@ impl<'de> Deserialize<'de> for CoseSign1 {
 
 impl CoseSign1 {
     /// Parse CBOR bytes into struct. Adapted from <https://github.com/awslabs/aws-nitro-enclaves-cose/blob/main/src/sign.rs>
-    pub fn parse_and_validate(bytes: &[u8]) -> Result<Self, NitroError> {
+    pub fn parse_and_validate(bytes: &[u8]) -> Result<Self, NitroAttestationVerifyError> {
         let tagged_value: ciborium::value::Value = ciborium::de::from_reader(bytes)
-            .map_err(|e| NitroError::InvalidCoseSign1(e.to_string()))?;
+            .map_err(|e| NitroAttestationVerifyError::InvalidCoseSign1(e.to_string()))?;
 
         let (tag, value) = match tagged_value {
             ciborium::value::Value::Tag(tag, box_value) => (Some(tag), *box_value),
@@ -285,7 +302,11 @@ impl CoseSign1 {
         // Validate tag (18 is the COSE_Sign1 tag)
         match tag {
             None | Some(18) => (),
-            Some(_) => return Err(NitroError::InvalidCoseSign1("Invalid tag".to_string())),
+            Some(_) => {
+                return Err(NitroAttestationVerifyError::InvalidCoseSign1(
+                    "invalid tag".to_string(),
+                ))
+            }
         }
 
         // Create a buffer for serialization
@@ -293,27 +314,27 @@ impl CoseSign1 {
 
         // Serialize the value into the buffer
         ciborium::ser::into_writer(&value, &mut buf)
-            .map_err(|e| NitroError::InvalidCoseSign1(e.to_string()))?;
+            .map_err(|e| NitroAttestationVerifyError::InvalidCoseSign1(e.to_string()))?;
 
         // Deserialize the COSE_Sign1 structure from the buffer
         let cosesign1: Self = ciborium::de::from_reader(&buf[..])
-            .map_err(|e| NitroError::InvalidCoseSign1(e.to_string()))?;
+            .map_err(|e| NitroAttestationVerifyError::InvalidCoseSign1(e.to_string()))?;
 
         // Validate protected header
         let _: HeaderMap = ciborium::de::from_reader(cosesign1.protected.as_slice())
-            .map_err(|e| NitroError::InvalidCoseSign1(e.to_string()))?;
+            .map_err(|e| NitroAttestationVerifyError::InvalidCoseSign1(e.to_string()))?;
 
         cosesign1.validate_header()?;
         Ok(cosesign1)
     }
 
     /// Validate protected header, payload and signature length.
-    pub fn validate_header(&self) -> Result<(), NitroError> {
+    pub fn validate_header(&self) -> Result<(), NitroAttestationVerifyError> {
         if !(Self::is_valid_protected_header(self.protected.as_slice())
             && (1..16384).contains(&self.payload.len())
             && self.signature.len() == 96)
         {
-            return Err(NitroError::InvalidCoseSign1(
+            return Err(NitroAttestationVerifyError::InvalidCoseSign1(
                 "invalid cbor header".to_string(),
             ));
         }
@@ -381,43 +402,46 @@ impl AttestationDocument {
         payload: &Vec<u8>,
         curr_timestamp: u64,
         expected_pcrs: &[&[u8]],
-    ) -> Result<AttestationDocument, NitroError> {
+    ) -> Result<AttestationDocument, NitroAttestationVerifyError> {
         let document_data: ciborium::value::Value = ciborium::de::from_reader(payload.as_slice())
             .map_err(|err| {
-            NitroError::InvalidAttestationDoc(format!("Cannot parse payload CBOR: {}", err))
+            NitroAttestationVerifyError::InvalidAttestationDoc(format!(
+                "cannot parse payload CBOR: {}",
+                err
+            ))
         })?;
 
         let document_map = match document_data {
             ciborium::value::Value::Map(map) => map,
             _ => {
-                return Err(NitroError::InvalidAttestationDoc(format!(
-                    "Expected map, got {:?}",
+                return Err(NitroAttestationVerifyError::InvalidAttestationDoc(format!(
+                    "expected map, got {:?}",
                     document_data
                 )))
             }
         };
 
-        let get_string = |key: &str| -> Result<String, NitroError> {
+        let get_string = |key: &str| -> Result<String, NitroAttestationVerifyError> {
             match document_map
                 .iter()
                 .find(|(k, _)| matches!(k, ciborium::value::Value::Text(s) if s == key))
             {
                 Some((_, ciborium::value::Value::Text(val))) => Ok(val.clone()),
-                _ => Err(NitroError::InvalidAttestationDoc(format!(
-                    "Cannot parse {}",
+                _ => Err(NitroAttestationVerifyError::InvalidAttestationDoc(format!(
+                    "cannot parse {}",
                     key
                 ))),
             }
         };
 
-        let get_bytes = |key: &str| -> Result<Vec<u8>, NitroError> {
+        let get_bytes = |key: &str| -> Result<Vec<u8>, NitroAttestationVerifyError> {
             match document_map
                 .iter()
                 .find(|(k, _)| matches!(k, ciborium::value::Value::Text(s) if s == key))
             {
                 Some((_, ciborium::value::Value::Bytes(val))) => Ok(val.clone()),
-                _ => Err(NitroError::InvalidAttestationDoc(format!(
-                    "Cannot parse {}",
+                _ => Err(NitroAttestationVerifyError::InvalidAttestationDoc(format!(
+                    "cannot parse {}",
                     key
                 ))),
             }
@@ -445,15 +469,15 @@ impl AttestationDocument {
                 // Convert Integer to i128 first, then to u64
                 let i128_val: i128 = (*val).into();
                 u64::try_from(i128_val).map_err(|err| {
-                    NitroError::InvalidAttestationDoc(format!(
-                        "Cannot convert timestamp to u64: {}",
+                    NitroAttestationVerifyError::InvalidAttestationDoc(format!(
+                        "cannot convert timestamp to u64: {}",
                         err
                     ))
                 })?
             }
             _ => {
-                return Err(NitroError::InvalidAttestationDoc(
-                    "Cannot parse timestamp".to_string(),
+                return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
+                    "cannot parse timestamp".to_string(),
                 ))
             }
         };
@@ -472,16 +496,16 @@ impl AttestationDocument {
                     ) {
                         pcr_vec.push(val.clone());
                     } else {
-                        return Err(NitroError::InvalidAttestationDoc(
-                            "Invalid PCR format".to_string(),
+                        return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
+                            "invalid PCR format".to_string(),
                         ));
                     }
                 }
                 pcr_vec
             }
             _ => {
-                return Err(NitroError::InvalidAttestationDoc(
-                    "Cannot parse PCRs".to_string(),
+                return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
+                    "cannot parse PCRs".to_string(),
                 ))
             }
         };
@@ -497,14 +521,14 @@ impl AttestationDocument {
                 .iter()
                 .map(|v| match v {
                     ciborium::value::Value::Bytes(bytes) => Ok(bytes.clone()),
-                    _ => Err(NitroError::InvalidAttestationDoc(
-                        "Invalid cabundle format".to_string(),
+                    _ => Err(NitroAttestationVerifyError::InvalidAttestationDoc(
+                        "invalid cabundle format".to_string(),
                     )),
                 })
                 .collect::<Result<Vec<_>, _>>()?,
             _ => {
-                return Err(NitroError::InvalidAttestationDoc(
-                    "Cannot parse cabundle".to_string(),
+                return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
+                    "cannot parse cabundle".to_string(),
                 ))
             }
         };
@@ -527,7 +551,7 @@ impl AttestationDocument {
     }
 
     /// Verify the certificate against AWS Nitro root of trust and checks expiry.
-    fn validate_cert(&self, now: u64) -> Result<(), NitroError> {
+    fn validate_cert(&self, now: u64) -> Result<(), NitroAttestationVerifyError> {
         // Create chain starting with leaf cert all the way to root.
         let mut chain = Vec::with_capacity(1 + self.cabundle.len());
         chain.push(self.certificate.as_slice());
@@ -536,13 +560,13 @@ impl AttestationDocument {
     }
 
     /// Validate the PCRs against the expected PCRs.
-    fn validate_pcrs(&self, expected_pcrs: &[&[u8]]) -> Result<(), NitroError> {
+    fn validate_pcrs(&self, expected_pcrs: &[&[u8]]) -> Result<(), NitroAttestationVerifyError> {
         if expected_pcrs.is_empty() || expected_pcrs.len() > 32 {
-            return Err(NitroError::InvalidPcrs);
+            return Err(NitroAttestationVerifyError::InvalidPcrs);
         }
         for (i, expected_pcr) in expected_pcrs.iter().enumerate() {
             if self.pcrs[i] != *expected_pcr {
-                return Err(NitroError::InvalidPcrs);
+                return Err(NitroAttestationVerifyError::InvalidPcrs);
             }
         }
         Ok(())
@@ -550,71 +574,58 @@ impl AttestationDocument {
 }
 
 /// Validate the certificate chain against the root of trust.
-fn validate_cert_chain(cert_chain: &[&[u8]], now_ms: u64) -> Result<(), NitroError> {
-    if cert_chain.is_empty() || cert_chain.len() > 20 {
-        return Err(NitroError::InvalidCertificate(
-            "No certificate chain".to_string(),
+fn validate_cert_chain(
+    cert_chain: &[&[u8]],
+    now_ms: u64,
+) -> Result<(), NitroAttestationVerifyError> {
+    if cert_chain.is_empty() || cert_chain.len() > MAX_CERT_CHAIN_LENGTH {
+        return Err(NitroAttestationVerifyError::InvalidCertificate(
+            "invalid certificate chain length".to_string(),
         ));
     }
 
     let root_cert = X509Certificate::from_der(ROOT_CERTIFICATE.as_slice())
-        .map_err(|e| NitroError::InvalidCertificate(e.to_string()))?
+        .map_err(|e| NitroAttestationVerifyError::InvalidCertificate(e.to_string()))?
         .1;
-    let now_secs = now_ms / 1000;
+
+    let now_secs = ASN1Time::from_timestamp(now_ms as i64 / 1000_i64)
+        .map_err(|e| NitroAttestationVerifyError::InvalidCertificate(e.to_string()))?;
 
     // Validate the chain starting from the leaf
     for i in 0..cert_chain.len() {
         let cert = X509Certificate::from_der(cert_chain[i])
-            .map_err(|e| NitroError::InvalidCertificate(e.to_string()))?
+            .map_err(|e| NitroAttestationVerifyError::InvalidCertificate(e.to_string()))?
             .1;
 
-        // Check timestamp in seconds.
-        if now_secs < cert.validity().not_before.timestamp() as u64 {
-            return Err(NitroError::InvalidCertificate(
-                "Certificate not yet valid".to_string(),
-            ));
-        }
-        if now_secs > cert.validity().not_after.timestamp() as u64 {
-            return Err(NitroError::InvalidCertificate(
-                "Certificate expired".to_string(),
+        // Check timestamp validity
+        if !cert.validity().is_valid_at(now_secs) {
+            return Err(NitroAttestationVerifyError::InvalidCertificate(
+                "Certificate timestamp not valid".to_string(),
             ));
         }
 
         // Get issuer cert from either next in chain or root
         let issuer_cert = if i < cert_chain.len() - 1 {
             X509Certificate::from_der(cert_chain[i + 1])
-                .map_err(|e| NitroError::InvalidCertificate(e.to_string()))?
+                .map_err(|e| NitroAttestationVerifyError::InvalidCertificate(e.to_string()))?
                 .1
         } else {
             root_cert.clone()
         };
 
-        // Verify issuer/subject chaining.
+        // Verify issuer/subject chaining
         if cert.issuer() != issuer_cert.subject() {
-            return Err(NitroError::InvalidCertificate(
-                "Certificate chain issuer mismatch".to_string(),
+            return Err(NitroAttestationVerifyError::InvalidCertificate(
+                "certificate chain issuer mismatch".to_string(),
             ));
         }
 
-        // Verify certificate signature.
-        let verifying_key = match issuer_cert.public_key().parsed() {
-            Ok(PublicKey::EC(ec)) => VerifyingKey::from_sec1_bytes(ec.data()).map_err(|_| {
-                NitroError::InvalidCertificate("Invalid cert public key".to_string())
-            })?,
-            _ => {
-                return Err(NitroError::InvalidCertificate(
-                    "Invalid cert public key".to_string(),
-                ))
-            }
-        };
-
-        let signature = Signature::from_der(cert.signature_value.as_ref())
-            .map_err(|_| NitroError::InvalidCertificate("Invalid cert signature".to_string()))?;
-
-        verifying_key
-            .verify(cert.tbs_certificate.as_ref(), &signature)
+        // Verify signature
+        cert.verify_signature(Some(issuer_cert.public_key()))
             .map_err(|_| {
-                NitroError::InvalidCertificate("Cert signature fails to verify".to_string())
+                NitroAttestationVerifyError::InvalidCertificate(
+                    "certificate fails to verify".to_string(),
+                )
             })?;
     }
 

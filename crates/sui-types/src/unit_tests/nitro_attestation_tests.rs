@@ -120,7 +120,9 @@ fn test_over_certificate_expiration() {
     );
     assert_eq!(
         res.unwrap_err(),
-        SuiError::AttestationFailedToVerify("InvalidCertificate: Certificate expired".to_string())
+        SuiError::AttestationFailedToVerify(
+            "InvalidCertificate: Certificate timestamp not valid".to_string()
+        )
     );
 
     let now = 1731627987382 - 3 * 60 * 60 * 1000; // subtract 3 hours, cert is not valid yet
@@ -137,7 +139,7 @@ fn test_over_certificate_expiration() {
     assert_eq!(
         res.unwrap_err(),
         SuiError::AttestationFailedToVerify(
-            "InvalidCertificate: Certificate not yet valid".to_string()
+            "InvalidCertificate: Certificate timestamp not valid".to_string()
         )
     );
 }
