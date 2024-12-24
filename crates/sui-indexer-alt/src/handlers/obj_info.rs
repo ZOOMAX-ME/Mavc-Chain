@@ -33,6 +33,7 @@ impl Processor for ObjInfo {
     const NAME: &'static str = "obj_info";
     type Value = ProcessedObjInfo;
 
+    // TODO: Add tests for this function and the pruner.
     fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let cp_sequence_number = checkpoint.checkpoint_summary.sequence_number;
         let checkpoint_input_objects = checkpoint.checkpoint_input_objects();
