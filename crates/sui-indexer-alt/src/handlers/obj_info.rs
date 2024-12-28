@@ -163,3 +163,6 @@ impl TryInto<StoredObjInfo> for &ProcessedObjInfo {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {}
